@@ -130,6 +130,24 @@ class DatasetCatalog(object):
                 factory="PascalVOCDataset",
                 args=args,
             )
+        elif name == 'tabletop_object_dataset_rgb':
+            # this stuff is hard-coded
+            return dict(
+                factory="Tabletop_Object_Dataset_RGB",
+                args={},
+            )
+        elif name == 'tabletop_object_dataset_depth':
+            # this stuff is hard-coded
+            return dict(
+                factory="Tabletop_Object_Dataset_Depth",
+                args={},
+            )
+        elif name == 'tabletop_object_dataset_rgbd':
+            # this stuff is hard-coded
+            return dict(
+                factory="Tabletop_Object_Dataset_RGBD",
+                args={},
+            )
         raise RuntimeError("Dataset not available: {}".format(name))
 
 
