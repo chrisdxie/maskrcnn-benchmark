@@ -23,7 +23,7 @@ from maskrcnn_benchmark.utils.collect_env import collect_env_info
 from maskrcnn_benchmark.utils.comm import synchronize, get_rank
 from maskrcnn_benchmark.utils.imports import import_file
 from maskrcnn_benchmark.utils.logger import setup_logger
-from maskrcnn_benchmark.utils.miscellaneous import mkdir
+from maskrcnn_benchmark.utils.miscellaneous import mkdir, save_config
 
 # See if we can use apex.DistributedDataParallel instead of the torch default,
 # and enable mixed-precision via apex.amp
@@ -72,16 +72,25 @@ def train(cfg, local_rank, distributed):
         start_iter=arguments["iteration"],
     )
 
+    test_period = cfg.SOLVER.TEST_PERIOD
+    if test_period > 0:
+        data_loader_val = make_data_loader(cfg, is_train=False, is_distributed=distributed, is_for_period=True)
+    else:
+        data_loader_val = None
+
     checkpoint_period = cfg.SOLVER.CHECKPOINT_PERIOD
 
     do_train(
+        cfg,
         model,
         data_loader,
+        data_loader_val,
         optimizer,
         scheduler,
         checkpointer,
         device,
         checkpoint_period,
+        test_period,
         arguments,
     )
 
@@ -112,6 +121,7 @@ def run_test(cfg, model, distributed):
             dataset_name=dataset_name,
             iou_types=iou_types,
             box_only=False if cfg.MODEL.RETINANET_ON else cfg.MODEL.RPN_ONLY,
+            bbox_aug=cfg.TEST.BBOX_AUG.ENABLED,
             device=cfg.MODEL.DEVICE,
             expected_results=cfg.TEST.EXPECTED_RESULTS,
             expected_results_sigma_tol=cfg.TEST.EXPECTED_RESULTS_SIGMA_TOL,
@@ -175,6 +185,11 @@ def main():
         config_str = "\n" + cf.read()
         logger.info(config_str)
     logger.info("Running with config:\n{}".format(cfg))
+
+    output_config_path = os.path.join(cfg.OUTPUT_DIR, 'config.yml')
+    logger.info("Saving config into: {}".format(output_config_path))
+    # save overloaded model config in the output directory
+    save_config(cfg, output_config_path)
 
     model = train(cfg, args.local_rank, args.distributed)
 
