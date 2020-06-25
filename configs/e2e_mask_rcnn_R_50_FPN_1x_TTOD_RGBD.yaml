@@ -43,4 +43,4 @@ SOLVER:
   IMS_PER_BATCH: 8
   STEPS: (480000, 640000)
   MAX_ITER: 100000
-OUTPUT_DIR: /home/chrisxie/projects/ssc/external/maskrcnn/RGBD_train_rebuttal/
+OUTPUT_DIR: /home/chrisxie/projects/ssc/external/maskrcnn/RGBD_train_v5/

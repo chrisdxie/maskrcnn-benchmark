@@ -271,3 +271,25 @@ def imwrite_indexed(filename,array):
     im = Image.fromarray(array)
     im.putpalette(color_palette.ravel())
     im.save(filename, format='PNG')
+
+def seg2bmap(seg, return_contour=False):
+    """ From a segmentation, compute a binary boundary map with 1 pixel wide
+        boundaries. This boundary lives on the mask, i.e. it's a subset of the mask.
+
+        @param seg: a [H x W] numpy array of values in {0,1}
+
+        @return: a [H x W] numpy array of values in {0,1}
+                 a [2 x num_boundary_pixels] numpy array. [0,:] is y-indices, [1,:] is x-indices
+    """
+    seg = seg.astype(np.uint8)
+    contours, hierarchy = cv2.findContours(seg, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    temp = np.zeros_like(seg)
+    bmap = cv2.drawContours(temp, contours, -1, 1, 1)
+
+    if return_contour: # Return the SINGLE largest contour
+        contour_sizes = [len(c) for c in contours]
+        ind = np.argmax(contour_sizes)
+        contour = np.ascontiguousarray(np.fliplr(contours[ind][:,0,:]).T) # Shape: [2 x num_boundary_pixels]
+        return bmap, contour
+    else:
+        return bmap

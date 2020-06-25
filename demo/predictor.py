@@ -107,7 +107,8 @@ class COCODemo(object):
         show_mask_heatmaps=False,
         masks_per_dim=2,
         min_image_size=224,
-        show_mask_map=False,
+        show_mask_map_nice=False,
+        show_mask_map_raw=False,
     ):
         self.cfg = cfg.clone()
         self.model = build_detection_model(cfg)
@@ -134,7 +135,8 @@ class COCODemo(object):
         self.masks_per_dim = masks_per_dim
 
         # My visualization
-        self.show_mask_map = show_mask_map
+        self.show_mask_map_nice = show_mask_map_nice
+        self.show_mask_map_raw = show_mask_map_raw
 
     def build_transform(self):
         """
@@ -188,10 +190,12 @@ class COCODemo(object):
         if self.show_mask_heatmaps:
             return self.create_mask_montage(result, top_predictions)
 
-        if self.show_mask_map:
+        if self.show_mask_map_nice:
             mask_map = self.create_mask_map(result, top_predictions)
             return util_.visualize_segmentation(result, mask_map, return_rgb=True)[..., [2,1,0]] 
             # pass in image/mask_map as RGB. color mask returned as BGR
+        elif self.show_mask_map_raw:
+            return self.create_mask_map(result, top_predictions)
 
         result = self.overlay_boxes(result, top_predictions)
         if self.cfg.MODEL.MASK_ON:
@@ -383,6 +387,9 @@ class COCODemo(object):
         obj_id = 2 # start at 2
         result = np.zeros((H,W))
         for idx in range(len(labels))[::-1]: # from lowest score to highest
+            label = self.CATEGORIES[labels[idx]]
+            if label == 'dining table': # leave out table for now
+                continue
             mask = masks[idx, 0] # Shape: [H x W]
             result[mask == 1] = obj_id
             obj_id += 1
@@ -491,7 +498,8 @@ class Tabletop_Object_Demo(object):
         confidence_threshold=0.7,
         show_mask_heatmaps=False,
         masks_per_dim=2,
-        show_mask_map=False,
+        show_mask_map_nice=False,
+        show_mask_map_raw=False,
     ):
         self.cfg = cfg.clone()
         self.model = build_detection_model(cfg)
@@ -502,8 +510,6 @@ class Tabletop_Object_Demo(object):
         save_dir = cfg.OUTPUT_DIR
         checkpointer = DetectronCheckpointer(cfg, self.model, save_dir=save_dir)
         _ = checkpointer.load(cfg.MODEL.WEIGHT)
-
-        self.transforms = self.build_transform()
 
         mask_threshold = -1 if show_mask_heatmaps else 0.5
         self.masker = Masker(threshold=mask_threshold, padding=1)
@@ -517,29 +523,8 @@ class Tabletop_Object_Demo(object):
         self.masks_per_dim = masks_per_dim
 
         # My visualization
-        self.show_mask_map = show_mask_map
-
-    def build_transform(self):
-        """
-        Creates a basic transformation that was used to train the models
-        """
-        cfg = self.cfg
-
-        # we are loading images with OpenCV, so we don't need to convert them
-        # to BGR, they are already! So all we need to do is to normalize tp [0-1] range
-        # which T.ToTensor already does
-
-        if cfg.INPUT.USE_RGB:
-            transform = T.Compose(
-                [
-                    T.ToPILImage(),
-                    T.ToTensor(), # [0-1] range
-                ]
-            )
-        else: # for depth, all transformations (compute_xyz) are computed outside of this class
-            transform = T.ToTensor() # note that since image is np.float32 of shape [H x W x C],
-                                     # this will simply turn it into a torch tensor of shape [C x H x W]
-        return transform
+        self.show_mask_map_nice = show_mask_map_nice
+        self.show_mask_map_raw = show_mask_map_raw
 
     def run_on_opencv_image(self, image, rgb_image):
         """
@@ -561,10 +546,12 @@ class Tabletop_Object_Demo(object):
         if self.show_mask_heatmaps:
             return self.create_mask_montage(result, top_predictions)
 
-        if self.show_mask_map:
+        if self.show_mask_map_nice:
             mask_map = self.create_mask_map(result, top_predictions)
             return util_.visualize_segmentation(result, mask_map, return_rgb=True)[..., [2,1,0]] 
             # pass in image/mask_map as RGB. color mask returned as BGR
+        elif self.show_mask_map_raw:
+            return self.create_mask_map(result, top_predictions)
 
         result = self.overlay_boxes(result, top_predictions)
         if self.cfg.MODEL.MASK_ON:
@@ -578,19 +565,18 @@ class Tabletop_Object_Demo(object):
     def compute_prediction(self, original_image):
         """
         Arguments:
-            original_image (np.ndarray): an image as returned by OpenCV
+            original_image (torch.Tensor): a preprocessed image of shape: [C x H x W]
 
         Returns:
             prediction (BoxList): the detected objects. Additional information
                 of the detection properties can be found in the fields of
                 the BoxList via `prediction.fields()`
         """
-        # apply pre-processing to image
-        if self.transforms is not None:
-            image = self.transforms(original_image)
+        # no pre-processing to image. This is assumed to be done outside of function call
+
         # convert to an ImageList, padded so that it is divisible by
         # cfg.DATALOADER.SIZE_DIVISIBILITY
-        image_list = to_image_list(image, self.cfg.DATALOADER.SIZE_DIVISIBILITY)
+        image_list = to_image_list(original_image, self.cfg.DATALOADER.SIZE_DIVISIBILITY)
         image_list = image_list.to(self.device)
         # compute predictions
         with torch.no_grad():
@@ -601,7 +587,7 @@ class Tabletop_Object_Demo(object):
         prediction = predictions[0]
 
         # reshape prediction (a BoxList) into the original image size
-        height, width = original_image.shape[:-1]
+        height, width = original_image.shape[1:]
         prediction = prediction.resize((width, height))
 
         if prediction.has_field("mask"):
@@ -760,10 +746,11 @@ class Tabletop_Object_Demo(object):
             mask = masks[idx, 0] # Shape: [H x W]
             if labels[idx] == 2:
                 result_label = obj_id
+                result[mask == 1] = result_label
                 obj_id += 1
-            elif labels[idx] == 1:
-                result_label = 1
-            result[mask == 1] = result_label
+            # elif labels[idx] == 1:
+            #     result_label = 1
+            # result[mask == 1] = result_label
 
         return result
 
