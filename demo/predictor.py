@@ -529,8 +529,8 @@ class Tabletop_Object_Demo(object):
     def run_on_opencv_image(self, image, rgb_image):
         """
         Arguments:
-            image (np.ndarray): a numpy array. could be an RGB image or a depth image
-            rgb_image (np.ndarray): an image as returned by OpenCV to draw results on
+            image (torch.Tensor): a preprocessed image of shape: [C x H x W]
+            rgb_image (np.ndarray): an image as returned by OpenCV to draw results on. [H, W, 3]
 
         Returns:
             prediction (BoxList): the detected objects. Additional information

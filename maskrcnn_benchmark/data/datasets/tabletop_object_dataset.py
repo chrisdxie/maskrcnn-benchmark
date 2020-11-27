@@ -319,3 +319,89 @@ class Tabletop_Object_Dataset_RGBD(Tabletop_Object_Dataset):
             1 : "table",
             2 : "object"
         }
+
+
+
+##### Separate Class for testing #####
+
+class Tabletop_Object_Dataset_Test(Dataset):
+    """ Data loader for Tabletop Object Dataset
+    """
+    NUM_VIEWS_PER_SCENE = 5
+
+
+    def __init__(self, base_dir):
+        self.base_dir = base_dir
+
+        # Get a list of all scenes
+        self.scene_dirs = sorted(glob.glob(self.base_dir + '*/'))
+        self.len = len(self.scene_dirs) * self.NUM_VIEWS_PER_SCENE
+
+        self.name = 'TableTop'
+
+        if 'v6' in self.base_dir:
+            global OBJECTS_LABEL
+            OBJECTS_LABEL = 4
+
+    def __len__(self):
+        return self.len
+
+    def process_rgb(self, rgb_img):
+        """ Process RGB image
+        """
+        rgb_img = rgb_img.astype(np.float32)
+        rgb_img = data_augmentation.BGR_image(rgb_img)
+        rgb_img = data_augmentation.array_to_tensor(rgb_img)
+
+        return rgb_img
+
+    def process_depth(self, depth_img):
+        """ Process depth channel
+                TODO: CHANGE THIS
+                - change from millimeters to meters
+                - cast to float32 data type
+                - add random noise
+                - compute xyz ordered point cloud
+        """
+
+        # millimeters -> meters
+        depth_img = (depth_img / 1000.).astype(np.float32)
+        xyz_img = compute_xyz(depth_img, data_loading_params)
+        xyz_img = data_augmentation.array_to_tensor(xyz_img)
+
+        return xyz_img
+
+    def __getitem__(self, idx):
+
+        cv2.setNumThreads(0) # some hack to make sure pyTorch doesn't deadlock. Found at https://github.com/pytorch/pytorch/issues/1355. Seems to work for me
+
+        # Get scene directory
+        scene_idx = idx // self.NUM_VIEWS_PER_SCENE
+        scene_dir = self.scene_dirs[scene_idx]
+        view_num = idx % self.NUM_VIEWS_PER_SCENE + 2
+
+        # RGB image
+        rgb_img_filename = scene_dir + f"rgb_{view_num:05d}.jpeg"
+        rgb_img = cv2.cvtColor(cv2.imread(rgb_img_filename), cv2.COLOR_BGR2RGB)
+        rgb_img = self.process_rgb(rgb_img)
+
+        # Depth image
+        depth_img_filename = scene_dir + f"depth_{view_num:05d}.png"
+        depth_img = cv2.imread(depth_img_filename, cv2.IMREAD_ANYDEPTH) # This reads a 16-bit single-channel image. Shape: [H x W]
+        xyz_img = self.process_depth(depth_img)
+
+        foreground_labels_filename = scene_dir + f"segmentation_{view_num:05d}.png"
+        label_abs_path = '/'.join(foreground_labels_filename.split('/')[-2:]) # Used for evaluation
+
+        return {'rgb' : rgb_img,
+                'xyz' : xyz_img,
+                'label_abs_path' : label_abs_path,
+                }
+
+def TOD_test_dataloader(base_dir, batch_size=8, num_workers=4, shuffle=False):
+
+    return DataLoader(dataset=Tabletop_Object_Dataset_Test(base_dir),
+                      batch_size=batch_size,
+                      shuffle=shuffle,
+                      num_workers=num_workers)
+
