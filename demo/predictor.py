@@ -168,17 +168,18 @@ class COCODemo(object):
         )
         return transform
 
-    def run_on_opencv_image(self, image, rgb_image=None):
+    def run_on_opencv_image(self, image, rgb_image=None, filter_classes=[]):
         """
         Arguments:
             image (np.ndarray): an image as returned by OpenCV
+            filter_classes (list): a list of classes to not predict.
 
         Returns:
             prediction (BoxList): the detected objects. Additional information
                 of the detection properties can be found in the fields of
                 the BoxList via `prediction.fields()`
         """
-        predictions = self.compute_prediction(image)
+        predictions = self.compute_prediction(image, filter_classes=filter_classes)
         top_predictions = self.select_top_predictions(predictions)
 
         if rgb_image is None:
@@ -206,7 +207,7 @@ class COCODemo(object):
 
         return result
 
-    def compute_prediction(self, original_image):
+    def compute_prediction(self, original_image, filter_classes=[]):
         """
         Arguments:
             original_image (np.ndarray): an image as returned by OpenCV
@@ -241,7 +242,12 @@ class COCODemo(object):
             # always single image is passed at a time
             masks = self.masker([masks], [prediction])[0]
             prediction.add_field("mask", masks)
-        return prediction
+
+        # filter unwated classes
+        labels = prediction.get_field("labels").tolist()
+        labels = [self.CATEGORIES[i] for i in labels]
+        keep = [label not in filter_classes for label in labels]
+        return prediction[keep]
 
     def select_top_predictions(self, predictions):
         """
@@ -311,7 +317,7 @@ class COCODemo(object):
         colors = self.compute_colors_for_labels(labels).tolist()
 
         for mask, color in zip(masks, colors):
-            thresh = mask[0, :, :, None]
+            thresh = mask[0, :, :, None].astype(np.uint8)  # cv2.findContours requires np.uint8 instead of np.bool...
             contours, hierarchy = cv2_util.findContours(
                 thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
             )
