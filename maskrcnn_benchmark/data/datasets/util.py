@@ -162,7 +162,7 @@ def append_channels_dim(img):
         raise Exception("This image is a weird shape: {0}".format(img.shape))
 
 
-def visualize_segmentation(im, masks, nc=None, return_rgb=False, save_dir=None):
+def visualize_segmentation(im, masks, nc=None, save_dir=None):
     """ Visualize segmentations nicely. Based on code from:
         https://github.com/roytseng-tw/Detectron.pytorch/blob/master/lib/utils/vis.py
 
@@ -183,12 +183,6 @@ def visualize_segmentation(im, masks, nc=None, return_rgb=False, save_dir=None):
 
     cm = plt.get_cmap('gist_rainbow')
     colors = [cm(1. * i/NUM_COLORS) for i in range(NUM_COLORS)]
-
-    # matplotlib stuff
-    fig = plt.figure()
-    ax = plt.Axes(fig, [0., 0., 1., 1.])
-    ax.axis('off')
-    fig.add_axes(ax)
 
     # Mask
     imgMask = np.zeros(im.shape)
@@ -232,23 +226,16 @@ def visualize_segmentation(im, masks, nc=None, return_rgb=False, save_dir=None):
 
         # Plot the nice outline
         for c in contour:
-            if save_dir is None and not return_rgb:
-                polygon = Polygon(c.reshape((-1, 2)), fill=False, facecolor=color_mask, edgecolor='w', linewidth=1.2, alpha=0.5)
-                ax.add_patch(polygon)
-            else:
-                cv2.drawContours(im, contour, -1, (255,255,255), 2)
+            cv2.drawContours(im, contour, -1, (255,255,255), 2)
 
 
-    if save_dir is None and not return_rgb:
-        ax.imshow(im)
-        return fig
-    elif return_rgb:
-        return im
-    elif save_dir is not None:
+    if save_dir is not None:
         # Save the image
         PIL_image = Image.fromarray(im)
         PIL_image.save(save_dir)
         return PIL_image
+    else:
+        return im
     
 
 ### These two functions were adatped from the DAVIS public dataset ###
@@ -293,3 +280,95 @@ def seg2bmap(seg, return_contour=False):
         return bmap, contour
     else:
         return bmap
+
+def subplotter(images, max_plots_per_row=4, fig_index_start=1):
+    """Plot images side by side.
+    
+    Args:
+        images: an Iterable of [H, W, C] np.arrays. If images is
+            a dictionary, the values are assumed to be the arrays,
+            and the keys are strings which will be titles.
+    """
+    
+    if type(images) not in [list, dict]:
+        raise Exception("images MUST be type list or dict...")
+
+    fig_index = fig_index_start
+    
+    num_plots = len(images)
+    num_rows = int(np.ceil(num_plots / max_plots_per_row))
+
+    for row in range(num_rows):
+
+        fig = plt.figure(fig_index, figsize=(max_plots_per_row*5, 5))
+        fig_index += 1
+
+        for j in range(max_plots_per_row):
+
+            ind = row*max_plots_per_row + j
+            if ind >= num_plots:
+                break
+
+            plt.subplot(1, max_plots_per_row, j+1)
+            if type(images) == dict:
+                title = list(images.keys())[ind]
+                image = images[title]
+                plt.title(title)
+            else:
+                image = images[ind]
+            plt.imshow(image)
+
+def gallery(images, row_height='auto'):
+    """Shows a set of images in a gallery that flexes with the width of the notebook.
+    
+    Args:
+        images: an Iterable of [H, W, C] np.arrays. If images is
+            a dictionary, the values are assumed to be the arrays,
+            and the keys are strings which will be titles.
+
+        row_height: str
+            CSS height value to assign to all images. Set to 'auto' by default to show images
+            with their native dimensions. Set to a value like '250px' to make all rows
+            in the gallery equal height.
+    """
+    def _src_from_data(data):
+        """Base64 encodes image bytes for inclusion in an HTML img element"""
+        img_obj = IP_Image(data=data)
+        for bundle in img_obj._repr_mimebundle_():
+            for mimetype, b64value in bundle.items():
+                if mimetype.startswith('image/'):
+                    return f'data:{mimetype};base64,{b64value}'
+
+    def _get_img_as_bytestring(img):
+        im = Image.fromarray(img)
+        buf = io.BytesIO()
+        im.save(buf, format='JPEG')
+        return buf.getvalue()
+    
+    if type(images) not in [list, dict]:
+        raise Exception("images MUST be type list or dict...")
+    
+    num_images = len(images)
+    
+    figures = []
+    for i in range(num_images):
+        if isinstance(images, list):
+            caption = ''
+            image = images[i]
+        else: # dict
+            caption = list(images.keys())[i]
+            image = images[caption]
+        src = _src_from_data(_get_img_as_bytestring(image))
+
+        figures.append(f'''
+            <figure style="margin: 5px !important;">
+              <img src="{src}" style="height: {row_height}">
+              {caption}
+            </figure>
+        ''')
+        
+    IP_display(IP_HTML(data=f'''
+        <div style="display: flex; flex-flow: row wrap; text-align: center;">
+        {''.join(figures)}
+        </div>
+    '''))

@@ -9,6 +9,7 @@ from maskrcnn_benchmark.structures.image_list import to_image_list
 from maskrcnn_benchmark.modeling.roi_heads.mask_head.inference import Masker
 from maskrcnn_benchmark import layers as L
 from maskrcnn_benchmark.utils import cv2_util
+from maskrcnn_benchmark.data.datasets import util as util_
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -193,7 +194,7 @@ class COCODemo(object):
 
         if self.show_mask_map_nice:
             mask_map = self.create_mask_map(result, top_predictions)
-            return util_.visualize_segmentation(result, mask_map, return_rgb=True)[..., [2,1,0]] 
+            return util_.visualize_segmentation(result, mask_map)[..., [2,1,0]] 
             # pass in image/mask_map as RGB. color mask returned as BGR
         elif self.show_mask_map_raw:
             return self.create_mask_map(result, top_predictions)
@@ -489,7 +490,6 @@ def vis_keypoints(img, kps, kp_thresh=2, alpha=0.7):
 
 
 
-from maskrcnn_benchmark.data.datasets import util as util_
 class Tabletop_Object_Demo(object):
     # COCO categories for pretty print
     CATEGORIES = [
@@ -554,7 +554,7 @@ class Tabletop_Object_Demo(object):
 
         if self.show_mask_map_nice:
             mask_map = self.create_mask_map(result, top_predictions)
-            return util_.visualize_segmentation(result, mask_map, return_rgb=True)[..., [2,1,0]] 
+            return util_.visualize_segmentation(result, mask_map)[..., [2,1,0]] 
             # pass in image/mask_map as RGB. color mask returned as BGR
         elif self.show_mask_map_raw:
             return self.create_mask_map(result, top_predictions)
